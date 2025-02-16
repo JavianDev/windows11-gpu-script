@@ -8,7 +8,7 @@
 # ============================
 # 🔒 1. ADMINISTRATOR CHECK
 # ============================
-function CheckAdmin {
+function Check-Admin {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -21,7 +21,7 @@ function CheckAdmin {
 # 🗑️ 2. CLEANUP FUNCTIONS (FIXED)
 # ============================
 # Function to clear temporary files
-function ClearTempFiles {
+function Clear-TempFiles {
     Write-Host "🧹 Clearing Temporary Files..." -ForegroundColor Yellow
     $tempPaths = @("$env:windir\Temp", "$env:localappdata\Temp")
     
@@ -34,7 +34,7 @@ function ClearTempFiles {
 }
 
 # Function to remove Windows.old folder (Fixed: Now properly closes)
-function RemoveOldWindowsInstallation {
+function Remove-OldWindowsInstallation {
     Write-Host "🗑️ Removing Old Windows Installation..." -ForegroundColor Yellow
     $oldWindowsFolder = "$env:SystemDrive\Windows.old"
     if (Test-Path $oldWindowsFolder) {
@@ -47,7 +47,7 @@ function RemoveOldWindowsInstallation {
 }
 
 # Function to clean Windows Update cache
-function ClearWindowsUpdateCache {
+function Clear-WindowsUpdateCache {
     Write-Host "🔄 Clearing Windows Update Cache..." -ForegroundColor Yellow
     Stop-Service -Name "wuauserv" -Force -ErrorAction SilentlyContinue
     Stop-Service -Name "bits" -Force -ErrorAction SilentlyContinue
@@ -60,14 +60,14 @@ function ClearWindowsUpdateCache {
     Start-Service -Name "bits"
 }
 # Function to remove bloatware
-function RemoveBloatware {
+function Remove-Bloatware {
     Write-Host "🛠️ Removing Bloatware..." -ForegroundColor Yellow
     Get-AppxPackage | Where-Object { $_.Name -match "(CandyCrush|Spotify|Xbox|Twitter)" } | Remove-AppxPackage
     Write-Host "✅ Bloatware removed!" -ForegroundColor Green
 }
 
 # Function to optimize GPU settings in registry
-function OptimizeGPU {
+function Optimize-GPU {
     Write-Host "💡 Optimizing GPU Settings..." -ForegroundColor Yellow
     $gpuRegPath = "HKLM:\SOFTWARE\Microsoft\Windows\Dwm"
     if (!(Test-Path $gpuRegPath)) {
@@ -77,8 +77,20 @@ function OptimizeGPU {
     Write-Host "✅ GPU settings optimized!" -ForegroundColor Green
 }
 
+# Function to clean up registry safely
+function SafeRegistryCleanup {
+    Write-Host "🔧 Cleaning Up Registry..." -ForegroundColor Yellow
+    $uninstallKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+    Get-ChildItem -Path $uninstallKey | Where-Object {
+        $_.GetValue("DisplayName") -match "Toolbar|Bloatware"
+    } | ForEach-Object {
+        Remove-Item -Path $_.PSPath -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "✅ Registry cleaned safely!" -ForegroundColor Green
+}
+
 # Function to clear log files
-function ClearLogFiles {
+function Clear-LogFiles {
     Write-Host "📝 Clearing Log Files..." -ForegroundColor Yellow
     $logPaths = @("$env:windir\System32\LogFiles", "$env:windir\Logs\CBS", "$env:windir\Temp")
     
@@ -91,7 +103,7 @@ function ClearLogFiles {
 }
 
 # Function to clear Prefetch files
-function ClearPrefetchFiles {
+function Clear-PrefetchFiles {
     Write-Host "⚡ Clearing Prefetch Files..." -ForegroundColor Yellow
     $prefetchFolder = "$env:windir\Prefetch"
     if (Test-Path $prefetchFolder) {
@@ -101,7 +113,7 @@ function ClearPrefetchFiles {
 }
 
 # Function to clear memory dumps
-function ClearMemoryDumps {
+function Clear-MemoryDumps {
     Write-Host "🗑️ Clearing Memory Dumps..." -ForegroundColor Yellow
     $minidumpFolder = "$env:windir\Minidump"
     if (Test-Path $minidumpFolder) {
@@ -117,14 +129,14 @@ function ClearMemoryDumps {
 }
 
 # Function to disable hibernation
-function DisableHibernation {
+function Disable-Hibernation {
     Write-Host "🔋 Disabling Hibernation..." -ForegroundColor Yellow
     powercfg -h off
     Write-Host "✅ Hibernation disabled and hiberfil.sys removed!" -ForegroundColor Green
 }
 
 # Function to manage system restore
-function ManageSystemRestore {
+function Manage-SystemRestore {
     Write-Host "🛠️ Managing System Restore Points..." -ForegroundColor Yellow
     vssadmin Resize ShadowStorage /On=C: /For=C: /MaxSize=5%
     vssadmin delete shadows /for=c: /oldest
@@ -132,14 +144,14 @@ function ManageSystemRestore {
 }
 
 # Function to run Disk Cleanup
-function RunDiskCleanup {
+function Run-DiskCleanup {
     Write-Host "🧹 Running Disk Cleanup..." -ForegroundColor Yellow
     Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -NoNewWindow -Wait
     Write-Host "✅ Disk cleanup completed!" -ForegroundColor Green
 }
 
 # Function to clear Windows Event Logs
-function ClearEventLogs {
+function Clear-EventLogs {
     Write-Host "📜 Clearing Windows Event Logs..." -ForegroundColor Yellow
     wevtutil el | Foreach-Object { wevtutil cl $_ }
     Write-Host "✅ Event logs cleared!" -ForegroundColor Green
@@ -148,36 +160,35 @@ function ClearEventLogs {
 # ============================
 # 💾 3. VIRTUAL MEMORY CONFIGURATION (UPDATED)
 # ============================
-function SetVirtualMemory {
+function Set-VirtualMemory {
     param ([int]$InitialSizeMB, [int]$MaximumSizeMB)
     $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
     $value = "C:\pagefile.sys $InitialSizeMB $MaximumSizeMB"
     Set-ItemProperty -Path $regPath -Name "PagingFiles" -Value $value
 }
 
-SetVirtualMemory -InitialSizeMB 16384 -MaximumSizeMB 32768
+Set-VirtualMemory -InitialSizeMB 16384 -MaximumSizeMB 32768
 Write-Host "✅ Virtual Memory Adjusted! Restart required." -ForegroundColor Green  
 
 # ============================
 # 🚀 4. MAIN CLEANUP FUNCTION
 # ============================
-function CleanWindowsSystem {
+function Clean-WindowsSystem {
     Write-Host "🚀 Starting Full System Cleanup..." -ForegroundColor Yellow
 
-    ClearTempFiles
-    RemoveOldWindowsInstallation
-    ClearWindowsUpdateCache
-    RemoveBloatware
-    OptimizeGPU    
-    ClearLogFiles
-    ClearPrefetchFiles
-    ClearMemoryDumps
-    DisableHibernation
-    ManageSystemRestore
-    RunDiskCleanup
-    ClearEventLogs
-    # Empty Recycle Bin
-    ClearRecycleBin -Force -ErrorAction SilentlyContinue
+    Clear-TempFiles
+    Remove-OldWindowsInstallation
+    Clear-WindowsUpdateCache
+    Remove-Bloatware
+    Optimize-GPU
+    SafeRegistryCleanup
+    Clear-LogFiles
+    Clear-PrefetchFiles
+    Clear-MemoryDumps
+    Disable-Hibernation
+    Manage-SystemRestore
+    Run-DiskCleanup
+    Clear-EventLogs
 
     Write-Host "✅ System Cleanup Completed!" -ForegroundColor Green
 }
@@ -185,81 +196,13 @@ function CleanWindowsSystem {
 # ============================
 # 🚀 5. EXECUTE OPTIMIZATION
 # ============================
-function StartOptimization {
-    CheckAdmin
-    CleanWindowsSystem
+function Start-Optimization {
+    Check-Admin
+    Clean-WindowsSystem
     
     Write-Host "✨ OPTIMIZATION COMPLETE! Please restart your computer." -ForegroundColor Cyan
     Read-Host "Press Enter to exit..."
 }
 
 # Run the script
-StartOptimization
-
-# ============================
-# 🚀 6. WINDOWS PERFORMANCE BOOST
-# ============================
-Write-Host "⚡ Applying Windows Performance Tweaks..." -ForegroundColor Yellow
-# Disable Startup Delay for Faster Boot
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize" /v StartupDelayInMSec /t REG_DWORD /d 0 /f
-
-# Enable High-Performance Power Plan
-powercfg -setactive SCHEME_MIN
-
-Write-Host "✅ Performance Boost Applied!" -ForegroundColor Green
-
-# ============================
-# 🚽 7. UNINSTALL BLOATWARE AND UNUSED PROGRAMS
-# ============================
-Write-Host "🚹 Removing Bloatware And Unused Apps..." -ForegroundColor Yellow
-
-$appsToRemove = @(
-    "Microsoft.3DBuilder", "Microsoft.BingNews", "Microsoft.GetHelp", "Microsoft.MicrosoftSolitaireCollection",
-    "Microsoft.NetworkSpeedTest", "Microsoft.OneConnect", "Microsoft.People", "Microsoft.Print3D",
-    "Microsoft.SkypeApp", "Microsoft.Xbox.TCUI", "Microsoft.XboxApp", "Microsoft.XboxGameOverlay"
-)
-foreach ($app in $appsToRemove) {
-    Get-AppxPackage -Name $app | Remove-AppxPackage -ErrorAction SilentlyContinue
-}
-
-Write-Host "✅ Bloatware Removed!" -ForegroundColor Green
-
-# ============================
-# 🧜 8. REGISTRY CLEANUP
-# ============================
-Write-Host "🧹 Cleaning Registry..." -ForegroundColor Yellow
-
-# Remove Old Software Registry Keys
-$keysToRemove = @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*")
-foreach ($key in $keysToRemove) {
-    Remove-Item -Path $key -Recurse -Force -ErrorAction SilentlyContinue
-}
-Write-Host "✅ Registry Cleanup Complete!" -ForegroundColor Green
-
-# ============================
-# 🔧 9. SET GPU PREFERENCES
-# ============================
-function Set-GpuPreference {
-    param ([string]$AppPath, [string]$Preference)
-    $regPath = "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences"
-    $value = "${AppPath},$Preference"
-    if (-not (Test-Path $regPath)) {
-        New-Item -Path "HKCU:\Software\Microsoft\DirectX" -Name "UserGpuPreferences" -Force
-    }
-    Set-ItemProperty -Path $regPath -Name $AppPath -Value $value
-}
-
-$gpuApps = @("C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "C:\Program Files\Mozilla Firefox\firefox.exe", "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE")
-foreach ($app in $gpuApps) {
-    Set-GpuPreference $app 2
-}
-Write-Host "✅ GPU Preferences Applied!" -ForegroundColor Green
-
-# ============================
-# 🎥 FINISH & RESTART PROMPT
-# ============================
-Write-Host "
-🎯 Optimization Completed! A restart is recommended."
-Write-Host "Press any key to exit..." -ForegroundColor Cyan
-$x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+Start-Optimization
