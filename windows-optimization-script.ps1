@@ -18,7 +18,7 @@ function CheckAdmin {
 }
 
 # ============================
-# 🗑️ 2. CLEANUP FUNCTIONS (FIXED)
+# 🗑️ 2. CLEANUP FUNCTIONS
 # ============================
 # Function to clear temporary files
 function ClearTempFiles {
@@ -186,11 +186,14 @@ function CleanWindowsSystem {
 # 🚀 5. EXECUTE OPTIMIZATION
 # ============================
 function StartOptimization {
-    CheckAdmin
+    Write-Host "✨ OPTIMIZATION Start!" -ForegroundColor Cyan
+    
+    #CheckAdmin
+    Write-Host "✨ Check Admin Complete!" -ForegroundColor Cyan
     CleanWindowsSystem
     
     Write-Host "✨ OPTIMIZATION COMPLETE! Please restart your computer." -ForegroundColor Cyan
-    Read-Host "Press Enter to exit..."
+    #Read-Host "Press Enter to exit..."
 }
 
 # Run the script
