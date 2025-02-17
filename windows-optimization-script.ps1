@@ -33,7 +33,7 @@ function ClearTempFiles {
     }
 }
 
-# Function to remove Windows.old folder (Fixed: Now properly closes)
+# Function to remove Windows.old folder
 function RemoveOldWindowsInstallation {
     Write-Host "🗑️ Removing Old Windows Installation..." -ForegroundColor Yellow
     $oldWindowsFolder = "$env:SystemDrive\Windows.old"
@@ -59,6 +59,7 @@ function ClearWindowsUpdateCache {
     Start-Service -Name "wuauserv"
     Start-Service -Name "bits"
 }
+
 # Function to remove bloatware
 function RemoveBloatware {
     Write-Host "🛠️ Removing Bloatware..." -ForegroundColor Yellow
@@ -146,7 +147,7 @@ function ClearEventLogs {
 }
 
 # ============================
-# 💾 3. VIRTUAL MEMORY CONFIGURATION (UPDATED)
+# 💾 3. VIRTUAL MEMORY CONFIGURATION
 # ============================
 function SetVirtualMemory {
     param ([int]$InitialSizeMB, [int]$MaximumSizeMB)
@@ -155,8 +156,95 @@ function SetVirtualMemory {
     Set-ItemProperty -Path $regPath -Name "PagingFiles" -Value $value
 }
 
-SetVirtualMemory -InitialSizeMB 16384 -MaximumSizeMB 32768
-Write-Host "✅ Virtual Memory Adjusted! Restart required." -ForegroundColor Green  
+# ============================
+# 💾 3. Smart Virtual Memory Configuration Script
+# ============================
+
+function Get-SystemRAM {
+    $physicalMemory = Get-WmiObject -Class Win32_ComputerSystem
+    return [Math]::Round($physicalMemory.TotalPhysicalMemory / 1GB, 2)
+}
+
+function Set-OptimalVirtualMemory {
+    Write-Host "🔍 Analyzing System Memory Configuration..." -ForegroundColor Yellow
+    
+    try {
+        # Get current RAM in GB
+        $ramInGB = Get-SystemRAM
+        Write-Host "✅ Detected Physical RAM: $ramInGB GB" -ForegroundColor Green
+
+        # Calculate optimal sizes based on RAM
+        $initialSizeMB = [Math]::Round($ramInGB * 1.5 * 1024) # 1.5x RAM in MB
+        $maxSizeMB = [Math]::Round($ramInGB * 3 * 1024)    # 3x RAM in MB
+
+        # Registry path for virtual memory settings
+        $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
+        
+        # Check available disk space
+        $systemDrive = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'"
+        $freeSpaceGB = [Math]::Round($systemDrive.FreeSpace / 1GB, 2)
+        
+        Write-Host "`n📊 System Analysis:" -ForegroundColor Cyan
+        Write-Host "   • Physical RAM: $ramInGB GB"
+        Write-Host "   • Free Disk Space: $freeSpaceGB GB"
+        Write-Host "   • Recommended Initial Size: $([Math]::Round($initialSizeMB/1024, 2)) GB"
+        Write-Host "   • Recommended Maximum Size: $([Math]::Round($maxSizeMB/1024, 2)) GB"
+
+        # Check if we have enough disk space
+        if ($freeSpaceGB -lt ($maxSizeMB / 1024 + 10)) {
+            Write-Host "`n⚠️ WARNING: Limited disk space available!" -ForegroundColor Yellow
+            Write-Host "   Consider cleaning up disk space or using smaller page file sizes." -ForegroundColor Yellow
+        }
+
+        # Get current page file settings
+        $currentSettings = Get-WmiObject -Class Win32_PageFileSetting
+
+        # Backup current settings
+        $backupValue = $null
+        if (Test-Path $regPath) {
+            $backupValue = (Get-ItemProperty -Path $regPath -Name "PagingFiles").PagingFiles
+        }
+
+        # Configure new page file
+        Write-Host "`n🔧 Configuring Virtual Memory..." -ForegroundColor Yellow
+        
+        # Remove current page file settings
+        if ($currentSettings) {
+            $currentSettings | ForEach-Object { $_.Delete() }
+        }
+
+        # Set new page file
+        $pageFile = "C:\pagefile.sys $initialSizeMB $maxSizeMB"
+        Set-ItemProperty -Path $regPath -Name "PagingFiles" -Value $pageFile
+
+        Write-Host "`n✅ Virtual Memory Configuration Complete!" -ForegroundColor Green
+        Write-Host "   Initial Size: $([Math]::Round($initialSizeMB/1024, 2)) GB"
+        Write-Host "   Maximum Size: $([Math]::Round($maxSizeMB/1024, 2)) GB"
+        
+        # Performance recommendations
+        Write-Host "`n💡 Recommendations:" -ForegroundColor Cyan
+        if ($ramInGB -lt 8) {
+            Write-Host "   • Consider upgrading RAM to at least 8GB for better performance"
+            Write-Host "   • Limit the number of applications running simultaneously"
+        }
+        Write-Host "   • Restart your computer to apply changes"
+        Write-Host "   • Monitor system performance after restart"
+
+        return $true
+    }
+    catch {
+        Write-Host "`n❌ Error configuring Virtual Memory:" -ForegroundColor Red
+        Write-Host "   $_" -ForegroundColor Red
+        
+        # Restore backup if available
+        if ($backupValue) {
+            Write-Host "`n🔄 Restoring previous settings..." -ForegroundColor Yellow
+            Set-ItemProperty -Path $regPath -Name "PagingFiles" -Value $backupValue
+        }
+        
+        return $false
+    }
+}
 
 # ============================
 # 🚀 4. MAIN CLEANUP FUNCTION
@@ -177,7 +265,7 @@ function CleanWindowsSystem {
     RunDiskCleanup
     ClearEventLogs
     # Empty Recycle Bin
-    ClearRecycleBin -Force -ErrorAction SilentlyContinue
+    Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 
     Write-Host "✅ System Cleanup Completed!" -ForegroundColor Green
 }
@@ -188,16 +276,25 @@ function CleanWindowsSystem {
 function StartOptimization {
     Write-Host "✨ OPTIMIZATION Start!" -ForegroundColor Cyan
     
-    #CheckAdmin
+    CheckAdmin
     Write-Host "✨ Check Admin Complete!" -ForegroundColor Cyan
     CleanWindowsSystem
     
     Write-Host "✨ OPTIMIZATION COMPLETE! Please restart your computer." -ForegroundColor Cyan
-    #Read-Host "Press Enter to exit..."
 }
 
-# Run the script
+# Run optimizations
 StartOptimization
+
+# Set virtual memory
+# SetVirtualMemory -InitialSizeMB 16384 -MaximumSizeMB 32768
+if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Set-OptimalVirtualMemory
+}
+else {
+    Write-Host "❌ This script requires Administrator privileges. Please run as Administrator." -ForegroundColor Red
+}
+Write-Host "✅ Virtual Memory Adjusted! Restart required." -ForegroundColor Green
 
 # ============================
 # 🚀 6. WINDOWS PERFORMANCE BOOST
@@ -252,8 +349,12 @@ function Set-GpuPreference {
     Set-ItemProperty -Path $regPath -Name $AppPath -Value $value
 }
 
-$gpuApps = @("C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "C:\Program Files\Mozilla Firefox\firefox.exe", "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE")
+$gpuApps = @(
+    "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    "C:\Program Files\Google\Chrome\Application\chrome.exe",
+    "C:\Program Files\Mozilla Firefox\firefox.exe",
+    "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+)
 foreach ($app in $gpuApps) {
     Set-GpuPreference $app 2
 }
@@ -263,6 +364,6 @@ Write-Host "✅ GPU Preferences Applied!" -ForegroundColor Green
 # 🎥 FINISH & RESTART PROMPT
 # ============================
 Write-Host "
-🎯 Optimization Completed! A restart is recommended."
+🎯 Optimization Completed! A restart is recommended." -ForegroundColor Green
 Write-Host "Press any key to exit..." -ForegroundColor Cyan
 $x = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
