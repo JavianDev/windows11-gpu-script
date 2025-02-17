@@ -42,7 +42,7 @@ function RemoveOldWindowsInstallation {
         Write-Host "✅ Windows.old folder removed!" -ForegroundColor Green
     }
     else {
-        Write-Host "ℹ️ No Windows.old folder found." -ForegroundColor Cyan
+        Write-Host "No Windows.old folder found." -ForegroundColor Cyan
     }
 }
 
@@ -80,7 +80,7 @@ function OptimizeGPU {
 
 # Function to clear log files
 function ClearLogFiles {
-    Write-Host "📝 Clearing Log Files..." -ForegroundColor Yellow
+    Write-Host "Clearing Log Files..." -ForegroundColor Yellow
     $logPaths = @("$env:windir\System32\LogFiles", "$env:windir\Logs\CBS", "$env:windir\Temp")
     
     foreach ($logPath in $logPaths) {
@@ -166,7 +166,7 @@ function Get-SystemRAM {
 }
 
 function Set-OptimalVirtualMemory {
-    Write-Host "🔍 Analyzing System Memory Configuration..." -ForegroundColor Yellow
+    Write-Host "Analyzing System Memory Configuration..." -ForegroundColor Yellow
     
     try {
         # Get current RAM in GB
@@ -184,7 +184,7 @@ function Set-OptimalVirtualMemory {
         $systemDrive = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'"
         $freeSpaceGB = [Math]::Round($systemDrive.FreeSpace / 1GB, 2)
         
-        Write-Host "`n📊 System Analysis:" -ForegroundColor Cyan
+        Write-Host "📊 System Analysis:" -ForegroundColor Cyan
         Write-Host "   • Physical RAM: $ramInGB GB"
         Write-Host "   • Free Disk Space: $freeSpaceGB GB"
         Write-Host "   • Recommended Initial Size: $([Math]::Round($initialSizeMB/1024, 2)) GB"
@@ -192,7 +192,7 @@ function Set-OptimalVirtualMemory {
 
         # Check if we have enough disk space
         if ($freeSpaceGB -lt ($maxSizeMB / 1024 + 10)) {
-            Write-Host "`n⚠️ WARNING: Limited disk space available!" -ForegroundColor Yellow
+            Write-Host "⚠️ WARNING: Limited disk space available!" -ForegroundColor Yellow
             Write-Host "   Consider cleaning up disk space or using smaller page file sizes." -ForegroundColor Yellow
         }
 
@@ -206,7 +206,7 @@ function Set-OptimalVirtualMemory {
         }
 
         # Configure new page file
-        Write-Host "`n🔧 Configuring Virtual Memory..." -ForegroundColor Yellow
+        Write-Host "🔧 Configuring Virtual Memory..." -ForegroundColor Yellow
         
         # Remove current page file settings
         if ($currentSettings) {
