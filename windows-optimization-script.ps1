@@ -20,50 +20,118 @@ function CheckAdmin {
 # ============================
 # 🗑️ 2. CLEANUP FUNCTIONS
 # ============================
-# Function to clear temporary files
+# Function to clear temporary files.
 function ClearTempFiles {
     Write-Host "🧹 Clearing Temporary Files..." -ForegroundColor Yellow
-    $tempPaths = @("$env:windir\Temp", "$env:localappdata\Temp")
-    
+    $tempPaths = @("$env:windir\Temp", "$env:localappdata\Temp", "$env:SystemRoot\Temp", "$env:LOCALAPPDATA\Temp\")
+
     foreach ($path in $tempPaths) {
         if (Test-Path $path) {
-            Get-ChildItem -Path $path -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Host "✅ Cleared files in $path" -ForegroundColor Green
+            Remove-Item -Path "$path\*" -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
+    Write-Host "✅ Temporary files cleared!" -ForegroundColor Green
 }
 
-# Function to remove Windows.old folder
+# Function to remove Windows.old and perform deep Windows cleanup
 function RemoveOldWindowsInstallation {
     Write-Host "🗑️ Removing Old Windows Installation..." -ForegroundColor Yellow
     $oldWindowsFolder = "$env:SystemDrive\Windows.old"
+
     if (Test-Path $oldWindowsFolder) {
+        Write-Host "Deleting Windows.old folder..." -ForegroundColor Cyan
         Remove-Item -Path $oldWindowsFolder -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "✅ Windows.old folder removed!" -ForegroundColor Green
     }
     else {
         Write-Host "No Windows.old folder found." -ForegroundColor Cyan
     }
+
+    # Run Disk Cleanup in silent mode
+    Write-Host "🗑️ Running Disk Cleanup for system files..." -ForegroundColor Yellow
+    cleanmgr /sagerun:1
+    Write-Host "✅ Disk Cleanup completed!" -ForegroundColor Green
 }
 
-# Function to clean Windows Update cache
+# Function to clean Windows Update cache and remove unnecessary update files
 function ClearWindowsUpdateCache {
     Write-Host "🔄 Clearing Windows Update Cache..." -ForegroundColor Yellow
-    Stop-Service -Name "wuauserv" -Force -ErrorAction SilentlyContinue
-    Stop-Service -Name "bits" -Force -ErrorAction SilentlyContinue
-    $updateCache = "$env:windir\SoftwareDistribution\Download"
-    if (Test-Path $updateCache) {
-        Get-ChildItem -Path $updateCache -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-        Write-Host "✅ Windows Update cache cleared!" -ForegroundColor Green
+
+    # Stop Windows Update services
+    Write-Host "Stopping Windows Update services..." -ForegroundColor Cyan
+    $services = @("wuauserv", "bits", "cryptsvc")
+    foreach ($service in $services) {
+        Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
     }
-    Start-Service -Name "wuauserv"
-    Start-Service -Name "bits"
+
+    # Define cache paths
+    $updateCache = "$env:windir\SoftwareDistribution"
+    $catroot2 = "$env:windir\System32\catroot2"
+
+    # Remove Windows Update cache
+    if (Test-Path $updateCache) {
+        Write-Host "Deleting SoftwareDistribution cache..." -ForegroundColor Yellow
+        Remove-Item -Path "$updateCache\*" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path $catroot2) {
+        Write-Host "Deleting Catroot2 cache..." -ForegroundColor Yellow
+        Remove-Item -Path "$catroot2\*" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "✅ Windows Update cache cleared successfully!" -ForegroundColor Green
+
+    # Restart Windows Update services
+    Write-Host "Restarting Windows Update services..." -ForegroundColor Cyan
+    foreach ($service in $services) {
+        Start-Service -Name $service
+    }
+
+    Write-Host "✅ Windows Update services restarted successfully!" -ForegroundColor Green
 }
 
-# Function to remove bloatware
+
+# ============================
+# 🚀 REMOVE WINDOWS BLOATWARE
+# ============================
+
 function RemoveBloatware {
     Write-Host "🛠️ Removing Bloatware..." -ForegroundColor Yellow
-    Get-AppxPackage | Where-Object { $_.Name -match "(CandyCrush|Spotify|Xbox|Twitter)" } | Remove-AppxPackage
+
+    # List of unwanted apps (Add or remove apps as needed)
+    $bloatwareApps = @(
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.YourPhone",
+        "Microsoft.BingNews",
+        "Microsoft.BingWeather",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.People",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo",
+        "Microsoft.WindowsFeedbackHub",
+        "Microsoft.WindowsMaps",
+        "Microsoft.3DBuilder",
+        "SpotifyAB.SpotifyMusic",
+        "King.com.CandyCrushSaga",
+        "King.com.CandyCrushFriends",
+        "Twitter.Twitter"
+    )
+
+    # Remove AppxPackages (per user)
+    foreach ($app in $bloatwareApps) {
+        Get-AppxPackage -AllUsers -Name $app | Remove-AppxPackage -ErrorAction SilentlyContinue
+    }
+
+    # Remove AppxProvisionedPackage (so it doesn’t come back)
+    foreach ($app in $bloatwareApps) {
+        Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -match $app } | ForEach-Object {
+            Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue
+        }
+    }
+
     Write-Host "✅ Bloatware removed!" -ForegroundColor Green
 }
 
@@ -117,26 +185,73 @@ function ClearMemoryDumps {
     }
 }
 
-# Function to disable hibernation
-function DisableHibernation {
-    Write-Host "🔋 Disabling Hibernation..." -ForegroundColor Yellow
-    powercfg -h off
-    Write-Host "✅ Hibernation disabled and hiberfil.sys removed!" -ForegroundColor Green
-}
-
-# Function to manage system restore
+# Function to manage system restore size
 function ManageSystemRestore {
     Write-Host "🛠️ Managing System Restore Points..." -ForegroundColor Yellow
+    
+    # Set System Restore to use a maximum of 5% disk space
     vssadmin Resize ShadowStorage /On=C: /For=C: /MaxSize=5%
-    vssadmin delete shadows /for=c: /oldest
+    
+    # Delete the oldest restore point
+    vssadmin delete shadows /for=c: /oldest /quiet
+
     Write-Host "✅ System Restore points managed!" -ForegroundColor Green
 }
 
-# Function to run Disk Cleanup
-function RunDiskCleanup {
-    Write-Host "🧹 Running Disk Cleanup..." -ForegroundColor Yellow
-    Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1" -NoNewWindow -Wait
-    Write-Host "✅ Disk cleanup completed!" -ForegroundColor Green
+# Function to delete all system restore points
+function RemoveOldRestorePoints {
+    Write-Host "🗑️ Deleting all system restore points..." -ForegroundColor Yellow
+    
+    # Delete all shadow copies (restore points)
+    vssadmin delete shadows /all /quiet
+
+    Write-Host "✅ System Restore points removed!" -ForegroundColor Green
+}
+
+# Remove old Windows update backup files
+function RemoveOldWindowsBackupFiles {
+    Write-Host "🗑️ Removing obsolete Windows update backup files..." -ForegroundColor Yellow
+    Remove-Item -Path "$env:SystemRoot\WinSxS\Backup\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "✅ Obsolete Windows update backup files removed!" -ForegroundColor Green
+}
+
+# Function to disable hibernation (frees up hiberfil.sys)
+function DisableHibernation {
+    Write-Host "🚀 Disabling Hibernation to free up space..." -ForegroundColor Yellow
+    powercfg -h off
+    Write-Host "✅ Hibernation disabled!" -ForegroundColor Green
+}
+
+# Function to clean Windows component store
+function CleanupWinSxS {
+    Write-Host "🧹 Running Windows Component Cleanup..." -ForegroundColor Yellow
+    DISM /Online /Cleanup-Image /StartComponentCleanup /ResetBase
+    Write-Host "✅ Component store cleaned!" -ForegroundColor Green
+}
+
+# Function to delete old unused drivers
+function RemoveOldDrivers {
+    Write-Host "🗑️ Removing old device drivers..." -ForegroundColor Yellow
+    pnputil /e | ForEach-Object { 
+        if ($_ -match "Published Name : (oem\d+\.inf)") { 
+            pnputil /d $matches[1] 
+        } 
+    }
+    Write-Host "✅ Old drivers removed!" -ForegroundColor Green
+}
+
+# Function to enable Windows Storage Sense for automatic cleanup
+function EnableStorageSense {
+    Write-Host "🛠️ Enabling Storage Sense..." -ForegroundColor Yellow
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v 01 /t REG_DWORD /d 1 /f
+    Write-Host "✅ Storage Sense enabled!" -ForegroundColor Green
+}
+
+# Function to compress Windows files
+function CompressSystemFiles {
+    Write-Host "🔧 Compressing Windows system files..." -ForegroundColor Yellow
+    Compact.exe /CompactOS:always
+    Write-Host "✅ System files compressed!" -ForegroundColor Green
 }
 
 # Function to clear Windows Event Logs
@@ -174,8 +289,8 @@ function Set-OptimalVirtualMemory {
         Write-Host "✅ Detected Physical RAM: $ramInGB GB" -ForegroundColor Green
 
         # Calculate optimal sizes based on RAM
-        $initialSizeMB = [Math]::Round($ramInGB * 1.5 * 1024) # 1.5x RAM in MB
-        $maxSizeMB = [Math]::Round($ramInGB * 3 * 1024)    # 3x RAM in MB
+        $initialSizeMB = [Math]::Round($ramInGB * 1 * 1024) # 1.5x RAM in MB
+        $maxSizeMB = [Math]::Round($ramInGB * 2 * 1024)    # 3x RAM in MB
 
         # Registry path for virtual memory settings
         $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
@@ -259,10 +374,16 @@ function CleanWindowsSystem {
     OptimizeGPU    
     ClearLogFiles
     ClearPrefetchFiles
-    ClearMemoryDumps
-    DisableHibernation
+    ClearMemoryDumps    
     ManageSystemRestore
-    RunDiskCleanup
+    
+    RemoveOldRestorePoints
+    RemoveOldWindowsBackupFiles
+    DisableHibernation
+    CleanupWinSxS
+    RemoveOldDrivers
+    EnableStorageSense
+    CompressSystemFiles
     ClearEventLogs
     # Empty Recycle Bin
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
